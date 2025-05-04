@@ -1,13 +1,13 @@
 import MySQLdb
 from MySQLdb.cursors import DictCursor
 from dbutils.pooled_db import PooledDB  # Librería para manejar un pool de conexiones
-
+import traceback
 import bcrypt
 """
 conn = MySQLdb.connect(
-    host="localhost",
-    user="joch",
-    passwd="1234",
+    host="proyecto.c3wo0a6usni0.eu-west-3.rds.amazonaws.com",
+    user="admin",
+    passwd="fbmoll1234",
     db="proyecto"
 )
 
@@ -73,20 +73,20 @@ def checkLogin(email, password):
     # Cerrar la conexión
     
 
-def reg_user(email, password):
+def reg_user(user_id, password):
     # Generar un hash seguro
     salt = bcrypt.gensalt()
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
     conn = get_connection()
     cursor = conn.cursor()
-
     # Insertar en la base de datos
-    query = "UPDATE users_login SET password = %s WHERE id = 2"
-    cursor.execute(query, (hashed_password,))
+    query = "UPDATE users_login SET password = %s WHERE id = %s"
+    cursor.execute(query, (hashed_password,user_id,))
 
     # Guardar cambios
     conn.commit()
-    print("Usuario registrado correctamente.")
+    cursor.close()
+    conn.close()
 
 def check_password(password, password_hash):
         """Verifica si la contraseña ingresada coincide con el hash almacenado."""

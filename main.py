@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+import traceback
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
@@ -97,6 +99,33 @@ async def sendTypes(request: Request):
             
             return types
       
+@app.get('/usuario')
+async def getUsuario(request:Request):
+    params = dict(request.query_params)
+    if 'user_id' in params:
+        reg = get_reg('users', params['user_id'])
+        return {'nombre': reg['nombre'], 'apellidos':reg['apellidos'], 'email': reg['email'] }
+
+@app.post('/admin')
+async def adminFuncs(request:Request):
+    print('Funciones de administrador')
+    data = await request.json()
+    print(data)
+    try:
+        if 'func' in data:
+            if data['func'] == 'updatePass':
+                reg_user(data['user_id'], data['newPass'])
+                return JSONResponse(content={"mensaje": "Contraseña actualizada correctamente"}, status_code=200)
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error actualizando:  {type(e).__name__} - {e}'}, status_code=500)
+        
+
+
+
+
+
 
 @app.post('/create')
 async def crearTypes(request: Request):
