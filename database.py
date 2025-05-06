@@ -1,15 +1,24 @@
 import MySQLdb
 from MySQLdb.cursors import DictCursor
+from MySQLdb import MySQLError
 from dbutils.pooled_db import PooledDB  # Librería para manejar un pool de conexiones
 import traceback
 import bcrypt
+
+import os
+from dotenv import load_dotenv
+import json
+
+
+load_dotenv()
+
+# Ahora puedes acceder a las variables
+DBHOST = os.getenv('DBHOST')
+DBUSER = os.getenv('DBUSER')
+DBPASS = os.getenv('DBPASS')
+DBNAME = os.getenv('DBNAME')
+
 """
-conn = MySQLdb.connect(
-    host="proyecto.c3wo0a6usni0.eu-west-3.rds.amazonaws.com",
-    user="admin",
-    passwd="fbmoll1234",
-    db="proyecto"
-)
 
 
 
@@ -31,10 +40,10 @@ conn.close()
 pool = PooledDB(
     MySQLdb,
     maxconnections=5,  # Máximo de conexiones simultáneas
-    host="localhost",
-    user="joch",
-    passwd="1234",
-    db="proyecto",
+    host=DBHOST,
+    user=DBUSER,
+    passwd=DBPASS,
+    db=DBNAME,
     cursorclass = DictCursor
 )
 
@@ -96,12 +105,13 @@ def crearReg(tabla, data):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-
+        cursor.execute(f'SELECT * FROM {tabla} LIMIT 0')
+        column_names = [desc[0] for desc in cursor.description]
         columns = []
         placeholders = []
         values = []
         for key,value in data.items():
-            if key == 'type':
+            if key not in column_names:
                 continue
             columns.append(key)
             placeholders.append(f'%s')
@@ -266,3 +276,28 @@ def get_userid(mail):
     cursor.close()
     conn.close()
     return res
+
+
+def deleteRegDB(tabla, campo, value):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        query = f'DELETE FROM {tabla} WHERE {campo} = %s'
+        print(query,value)
+        cursor.execute(query,(value,))
+        conn.commit() 
+        cursor.close()
+        conn.close()
+        return 
+    except MySQLError as e:
+        if conn:
+            conn.rollback()
+        print( str(e))
+        return {'error': str(e)}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

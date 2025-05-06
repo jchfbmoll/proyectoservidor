@@ -4,8 +4,10 @@ import traceback
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
-from database import getProyectosDB,reg_user,checkLogin,get_types,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid
-import json
+from database import getProyectosDB,reg_user,checkLogin,get_types,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB
+import os
+
+
 origins = [
    
     "*",  # Para permitir cualquier origen (NO recomendado para producción)
@@ -126,15 +128,45 @@ async def adminFuncs(request:Request):
 
 
 
-
 @app.post('/create')
 async def crearTypes(request: Request):
-    body = await request.body()
-    json_data = body.decode('utf-8')
-    data = json.loads(json_data)
-    tabla = data['type']
-    id = crearReg(tabla, data) 
-    return {'id': id}
+    try:
+        data = await request.json()
+        tabla = data['type']
+        user_id = crearReg(tabla, data) 
+
+        if data['type'] == 'users':
+            crearReg('users_login',data)
+            reg_user(user_id, data['password'])
+            crearReg('usuarios_empresas', {'user_id': user_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
+
+        return JSONResponse(content={"id":user_id, 'mensaje': f'Registro {user_id} de {tabla} creado correctamente'}, status_code=200)
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error creando el registro:  {type(e).__name__} - {e}'}, status_code=500)
+        
+@app.post('/delete')
+async def deleteReg(request: Request):
+    try:
+        data = await request.json()
+        tabla = data['type']
+        print (data)
+        if data['type'] == 'users':
+            deleteRegDB('users_login', data['campo'], data[data['campo']])  
+            deleteRegDB('usuarios_empresas', 'user_id',  data[data['campo']])
+
+        if data['type'] == 'empresa':
+            deleteRegDB('usuarios_empresas', 'empresa_id',  data[data['campo']])
+            deleteRegDB('proyectos', 'empresaid',  data[data['campo']])
+
+        deleteRegDB(tabla, data['campo'], data[data['campo']]) 
+
+        return JSONResponse(content={'mensaje': f'Registro {data[data['campo']]} de {tabla} eliminado correctamente'}, status_code=200)
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error creando el registro:  {type(e).__name__} - {e}'}, status_code=500)
 
 @app.post('/update')
 async def actualiza(request: Request):
