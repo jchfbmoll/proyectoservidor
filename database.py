@@ -18,24 +18,6 @@ DBUSER = os.getenv('DBUSER')
 DBPASS = os.getenv('DBPASS')
 DBNAME = os.getenv('DBNAME')
 
-"""
-
-
-
-
-cursor = conn.cursor()
-
-# Execute a query
-cursor.execute("SELECT VERSION()")
-
-# Fetch result
-data = cursor.fetchone()
-print("MySQL Database Version:", data)
-
-# Close connection
-conn.close()
-"""
-
 # Crear el pool de conexiones (configura el tamaño según la carga)
 pool = PooledDB(
     MySQLdb,
@@ -50,18 +32,6 @@ pool = PooledDB(
 # Obtener una conexión del pool
 def get_connection():
     return pool.connection()
-"""
-# Uso en una función
-def obtener_usuarios():
-    conn = get_connection()  # Obtener conexión del pool
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre FROM usuarios")
-    filas = cursor.fetchall()
-    cursor.close()
-    conn.close()  # Libera la conexión para que otro la use
-    return filas
-
-"""
 
 def checkLogin(email, password):
     conn = get_connection()
@@ -141,7 +111,10 @@ def get_reg(tabla: str, id: int):
     reg = cursor.fetchone()
     return reg
 
-def get_types(table:str):
+def get_allDB(table:str):
+
+    cursor = None
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -152,9 +125,14 @@ def get_types(table:str):
         conn.close()
         print(filas)
         return filas
-    except Exception as e:
-        print(e)
-        return -1
+    except MySQLError as e:
+        print( str(e))
+        return {'error': str(e)}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def readTareas(**kwargs):
     preguntas = []
@@ -292,9 +270,33 @@ def deleteRegDB(tabla, campo, value):
         conn.close()
         return 
     except MySQLError as e:
+        print( str(e))
         if conn:
             conn.rollback()
-        print( str(e))
+        return {'error': str(e)}
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def delete_allDB(tabla):
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        query = f'DELETE FROM {tabla}'
+        cursor.execute(query)
+        query = f'ALTER TABLE {tabla} AUTO_INCREMENT = 1'
+        cursor.execute(query)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return 
+    except MySQLError as e:
+        if conn:
+            conn.rollback()
         return {'error': str(e)}
     finally:
         if cursor:

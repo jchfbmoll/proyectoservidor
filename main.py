@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 import traceback
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Request
-from database import getProyectosDB,reg_user,checkLogin,get_types,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB
+from database import delete_allDB,getProyectosDB,reg_user,checkLogin,get_allDB,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB
 import os
-
+import json
 
 origins = [
    
@@ -91,15 +92,25 @@ async def login(user: UserLogin):
         print('Contraseña incorrecta')
         return {'message': f'Mail = {user.mail} Cotnraseña = {user.password}', 'valido': False}
     
-@app.get('/types')
-async def sendTypes(request: Request):
-    params = dict(request.query_params)
-    if 'type' in params:
-        if params['type'] :
-            
-            types = get_types(params['type'])
-            
-            return types
+@app.get('/all')
+async def get_all(request: Request):
+    try:
+        params = dict(request.query_params)
+        if 'tabla' in params:
+            if params['tabla'] :
+                types = get_allDB(params['tabla'])
+                if 'error' in types:
+                    raise Exception(types['error'])
+                json_types = jsonable_encoder(types)
+                return JSONResponse(content={"registros": json_types}, status_code=200)
+
+            raise Exception('No se encontró el campo tabla')
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error actualizando:  {type(e).__name__} - {e}'}, status_code=500)
+
+
       
 @app.get('/usuario')
 async def getUsuario(request:Request):
@@ -136,8 +147,8 @@ async def crearTypes(request: Request):
         user_id = crearReg(tabla, data) 
 
         if data['type'] == 'users':
-            crearReg('users_login',data)
-            reg_user(user_id, data['password'])
+            ulid = crearReg('users_login',data)
+            reg_user(ulid, data['password'])
             crearReg('usuarios_empresas', {'user_id': user_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
 
         return JSONResponse(content={"id":user_id, 'mensaje': f'Registro {user_id} de {tabla} creado correctamente'}, status_code=200)
@@ -159,6 +170,8 @@ async def deleteReg(request: Request):
         if data['type'] == 'empresa':
             deleteRegDB('usuarios_empresas', 'empresa_id',  data[data['campo']])
             deleteRegDB('proyectos', 'empresaid',  data[data['campo']])
+            deleteRegDB('tareas', 'empresaid',  data[data['campo']])
+
 
         deleteRegDB(tabla, data['campo'], data[data['campo']]) 
 
@@ -170,9 +183,7 @@ async def deleteReg(request: Request):
 
 @app.post('/update')
 async def actualiza(request: Request):
-    body = await request.body()
-    json_data = body.decode('utf-8')
-    data = json.loads(json_data)
+    data = await request.json()
     tabla = data['type']
     id_reg = data['id']
     campo = data['campo']
@@ -182,3 +193,22 @@ async def actualiza(request: Request):
         return {'msg': True }
     if 'error' in res:
         return {'error': f'Hubo un error actualizando el campo {campo} del registro {id} de la tabla {tabla}\nError: {res['error']}'}
+
+@app.post('/deleteall')
+async def delete_all(request: Request):
+    try:
+        data = await request.json()
+        tabla = data['tabla']
+        res = delete_allDB(tabla)
+        res = {}
+        if 'error' in res:
+            raise Exception(res['error'])
+        
+        return JSONResponse(content={'mensaje': f'Tabla {tabla} reiniciada correctamente '}, status_code=200)
+
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error borrando la tabla:  {type(e).__name__} - {e}'}, status_code=500)
+
+
