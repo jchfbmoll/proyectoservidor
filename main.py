@@ -1,22 +1,81 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,Depends,HTTPException,status
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-import traceback
-from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from jose import JWTError, jwt
+from datetime import datetime,timedelta,timezone
+
+import traceback
 from fastapi import Request
-from database import delete_allDB,getProyectosDB,reg_user,checkLogin,get_allDB,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB
+from dbfunctions import delete_allDB,getProyectosDB,reg_user,get_allDB,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB,get_regsDB
 import os
 import json
 
+from users import User,UserLogin
+from typing import Annotated,Optional
+import token
+
+from validation import authenticate_user, create_access_token, create_refresh_token, validate_tokens, get_token
 origins = [
    
-    "*",  # Para permitir cualquier origen (NO recomendado para producción)
+    "http://localhost",      # si accedes en local por puerto 80
+    "https://localhost",   # Para permitir cualquier origen (NO recomendado para producción)
+    "http://localhost:80",
+    "https://localhost:443",  # si tienes un frontend corriendo ahí
+    "http://127.0.0.1",
+    "http://127.0.0.1:80",
+    "https://127.0.0.1",
+    "https://127.0.0.1:443",
 ]
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "OPTIONS":
+            # No aplicar autenticación a las pre-flight
+            return await call_next(request)
+        public_paths = {"/", "/login", '/logout', '/check-auth'}
+        if request.url.path in public_paths:
+            return await call_next(request)
+        print(request.cookies)
+        access_token, refresh_token = validate_tokens(request)
+        print(access_token)
+        print(refresh_token)
+        if access_token:
+            response = await call_next(request)
+        elif refresh_token:
+            # Si solo tenemos un refresh_token válido, creamos un nuevo access_token
+            access_token = create_access_token(refresh_token['sub'])
+            
+            # Preparamos la respuesta
+            response = await call_next(request)
+            
+            # Agregamos el nuevo access_token a la respuesta en forma de cookie
+            response.set_cookie(
+                key="access_token",
+                value=access_token,
+                httponly=True,     # evita acceso desde JS
+                secure=False,      # solo HTTPS (ajústalo a True en producción)
+                samesite="None",   # previene CSRF
+                path="/",
+                max_age=60 * 30    # Duración del access_token
+            )
+        else:
+            # Si no hay tokens válidos, retornamos un error
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Unauthorized"},
+                headers={"Access-Control-Allow-Origin": 'http://localhost',
+                    'Access-Control-Allow-Credentials': 'true',
+                    'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
+                    'Access-Control-Allow-Headers':"*"             
+                }
+            )
+            
+        return response
 
-class UserLogin(BaseModel):
-    mail: str
-    password: str
+
+
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -26,33 +85,81 @@ app.add_middleware(
     allow_headers=["*"],  # Permite cualquier encabezado
 )
 
+app.add_middleware(AuthMiddleware)
+
 @app.get('/')
 def read_root():
     return {'message': 'Hola, Mundo!'}
 
+@app.get("/check-auth")
+def check_auth(request: Request):
+    access_token, refresh_token = validate_tokens(request)
+    
+    if access_token:
+        response = JSONResponse(status_code = 200,
+            content= {}
+        )        
+        return response
+
+    if refresh_token:
+        print(refresh_token)
+        access_token = create_access_token(refresh_token['sub'])
+        response = JSONResponse(status_code = 200,
+            content= {}
+        )            
+        response.set_cookie(key="access_token",
+            value=access_token,
+            httponly=True,     # evita acceso desde JS
+            secure=False,       # solo HTTPS
+            samesite="None", # previene CSRF
+            path="/",
+            max_age=60 * 30
+        )
+
+        return response
+
+    raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tokens invalidos",
+            )
+
 @app.get('/tareas')
 def getTareas(request:Request):
-    kwargs = {}
-    params = dict(request.query_params)
-    if 'mail' in params:
-        kwargs['usuario_encargado'] = params['mail']
-    if 'estado' in params:
-        kwargs['estado'] = params['estado']
-    if 'notEstado' in params:
-        kwargs['notEstado'] = params['notEstado']
-    if 'empresa' in params:
-        kwargs['empresa'] = params['empresa']
-    if 'proyectoId' in params:
-        kwargs['proyectoId'] = params['proyectoId']
-    taskList = readTareas(**kwargs)
-    tasks = []
-    for task in taskList:
-        print (f'prueba de {task}')
-        id_reg = task['id']
-        titulo = task['titulo']
-        estado = task['estado']
-        tasks.append([id_reg, titulo, estado])
-    return tasks
+    def montar_filtros_init(user: User) -> list:
+        print(user)
+        filtros = [] 
+        filtros.append(['estado', '!=', 4])
+        filtros.append(['usuario_encargado', '=', user['id']])
+        filtros.append(['empresa_id', '=', user['ultima_empresa_conn']])
+        return filtros
+    try:
+        refresh_token = request.cookies.get('refresh_token')
+        refresh_token = get_token(refresh_token)
+        user_id = refresh_token['sub']
+        user = get_reg('users', user_id)
+
+        params = dict(request.query_params)
+        print('Los params son')
+        print(params)
+    
+        if 'init' in params and params['init']:
+            filtros = montar_filtros_init(user)
+        elif 'proyectos' in params and params['proyectos']:
+            pass
+        taskList = readTareas(filtros)
+        tasks = []
+        for task in taskList:
+            print (f'prueba de {task}')
+            id_reg = task['id']
+            titulo = task['titulo']
+            estado = task['estado']
+            tasks.append([id_reg, titulo, estado])
+        return JSONResponse(content={"tareas": tasks}, status_code=200)
+    except:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error recuperando las tareas:  {type(e).__name__} - {e}'}, status_code=500)
+
 
 @app.get('/tareas/{tarea_id}')
 def read_tareas(tarea_id: int, otro: str=None):
@@ -61,36 +168,39 @@ def read_tareas(tarea_id: int, otro: str=None):
 
 @app.get('/empresas')
 def getEmpresas(request:Request):
-    params = dict(request.query_params)
-    if 'user_id' in params:
-        user_id = params['user_id']
+    try:
+        access_token, refresh_token = validate_tokens(request)
+        user_id = access_token['sub']
         empresas = check_empresas(user_id)
-        print(empresas)
-        return empresas
-    return {'error': 'Ha ocurrido un error recuperando las empresas asociadas a este usuario'}
+        return JSONResponse(content={"empresas": empresas}, status_code=200)
+    
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error actualizando:  {type(e).__name__} - {e}'}, status_code=500)
+
+    
+    
     
 
 @app.get('/proyectos')
 def getProyectos(request:Request):
-    params = dict(request.query_params)
-    if 'empresa' in params:
-        empresa = params['empresa']
-        proyectos = getProyectosDB(empresa)
+    try:
+        refresh_token = request.cookies.get('refresh_token')
+        refresh_token = get_token(refresh_token)
+        user_id = refresh_token['sub']
+        user = get_reg('users', user_id)   
+        proyectos = getProyectosDB(user['ultima_empresa_conn'])
+        print('Lista de proyectos')
         print(proyectos)
-        return proyectos
-    return {'error': 'Ha ocurrido un error recuperando las empresas asociadas a este usuario'}
+        return JSONResponse(content={"proyectos": proyectos}, status_code=200)
+    except Exception as e:
 
-@app.post('/login/')
-async def login(user: UserLogin):
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error recuperando los proyectos:  {type(e).__name__} - {e}'}, status_code=500)
 
-    if checkLogin(user.mail, user.password):
-        print('Contraseña correcta')
-        user_reg = get_userid(user.mail)
-        print(user_reg['id'])
-        return {'message': f'Mail = {user.mail} Cotnraseña = {user.password}', 'valido': True, 'user_id': user_reg['id'], 'ultima_empresa_conn': user_reg['ultima_empresa_conn']}
-    else:
-        print('Contraseña incorrecta')
-        return {'message': f'Mail = {user.mail} Cotnraseña = {user.password}', 'valido': False}
+    
     
 @app.get('/all')
 async def get_all(request: Request):
@@ -119,11 +229,32 @@ async def getUsuario(request:Request):
         reg = get_reg('users', params['user_id'])
         return {'nombre': reg['nombre'], 'apellidos':reg['apellidos'], 'email': reg['email'] }
 
+@app.get('/usuarios_encargados')
+async def get_usuarios_encargados(request:Request):
+    try:
+        refresh_token = request.cookies.get('refresh_token')
+        refresh_token = get_token(refresh_token)
+        user_id = refresh_token['sub']
+        user = get_reg('users', user_id)
+        filtros = []
+        filtros.append(['empresa_id', '=', user['ultima_empresa_conn']])
+        filtros.append(['rol_id', '!=', 4])
+        usr_enc = get_regsDB('usuarios_empresas', filtros)
+
+        user_enc_list = [get_reg('users', usr_enc_reg['user_id']) for usr_enc_reg in usr_enc]
+        print(user_enc_list)
+        return JSONResponse(content={"usuarios_encargados": user_enc_list}, status_code=200)
+
+
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error al obtener los usuarios encargados:  {type(e).__name__} - {e}'}, status_code=500)
+
+
 @app.post('/admin')
 async def adminFuncs(request:Request):
-    print('Funciones de administrador')
     data = await request.json()
-    print(data)
     try:
         if 'func' in data:
             if data['func'] == 'updatePass':
@@ -133,11 +264,6 @@ async def adminFuncs(request:Request):
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error actualizando:  {type(e).__name__} - {e}'}, status_code=500)
-        
-
-
-
-
 
 @app.post('/create')
 async def crearTypes(request: Request):
@@ -211,4 +337,85 @@ async def delete_all(request: Request):
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error borrando la tabla:  {type(e).__name__} - {e}'}, status_code=500)
 
+
+
+
+
+@app.post('/login')
+async def login(request: Request, form_data: Optional[UserLogin] = None):
+    
+    if form_data:
+        user = authenticate_user(form_data.mail, form_data.password)
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+            )
+    
+        access_token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
+        response = JSONResponse(status_code = 200,
+            content= {}
+        )
+                
+        response.set_cookie(key="access_token",
+            value=access_token,
+            httponly=True,     # evita acceso desde JS
+            secure=False,       # solo HTTPS
+            samesite="None", # previene CSRF
+            path="/",
+            max_age=60 * 30
+        )
+        response.set_cookie(key="refresh_token",
+            value=refresh_token,
+            httponly=True,     # evita acceso desde JS
+            secure=False,       # solo HTTPS
+            samesite="None", # previene CSRF
+            path="/",
+            max_age=60 * 60 * 24 * 180
+        )
+        return response
+    
+    raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+               
+            )
+
+
+@app.post('/logout')
+def logout(request: Request):
+    access_token, refresh_token = validate_tokens(request)
+
+    response = JSONResponse(status_code = 200,
+        content= {}
+    )
+
+    response.set_cookie(key="access_token",
+            value=access_token,
+            httponly=True,     # evita acceso desde JS
+            secure=False,       # solo HTTPS
+            samesite="None", # previene CSRF
+            path="/",
+            expires=datetime.now(timezone.utc) - timedelta(days=1)
+        )
+    response.set_cookie(key="refresh_token",
+            value=refresh_token,
+            httponly=True,     # evita acceso desde JS
+            secure=False,       # solo HTTPS
+            samesite="None", # previene CSRF
+            path="/",
+            expires=datetime.now(timezone.utc) - timedelta(days=1)
+        )
+
+    return response
+    
+@app.get('/me')
+def me(request: Request):
+    refresh_token = request.cookies.get('refresh_token')
+    refresh_token = get_token(refresh_token)
+    user_id = refresh_token['sub']
+    user = get_reg('users', user_id)
+    return JSONResponse(content={'user': user}, status_code=200)
 

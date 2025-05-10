@@ -3,7 +3,6 @@ from MySQLdb.cursors import DictCursor
 from MySQLdb import MySQLError
 from dbutils.pooled_db import PooledDB  # Librería para manejar un pool de conexiones
 import traceback
-import bcrypt
 
 import os
 from dotenv import load_dotenv
@@ -33,7 +32,21 @@ pool = PooledDB(
 def get_connection():
     return pool.connection()
 
-def checkLogin(email, password):
+def get_user_login(email: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Consulta con placeholder (%s)
+    query = "SELECT * FROM users_login WHERE email = %s"
+    cursor.execute(query, (email,))  # Importante: pasar los valores como una tupla
+
+    # Obtener los resultados
+    user = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return user
+
+def authenticate_user(email, password) -> any:
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -67,9 +80,7 @@ def reg_user(user_id, password):
     cursor.close()
     conn.close()
 
-def check_password(password, password_hash):
-        """Verifica si la contraseña ingresada coincide con el hash almacenado."""
-        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+
 
 def crearReg(tabla, data):
     try:
@@ -111,6 +122,42 @@ def get_reg(tabla: str, id: int):
     reg = cursor.fetchone()
     return reg
 
+def get_regsDB(tabla: str, filtros: list) -> any:
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        columns = []
+        placeholders = []
+        values = []
+        print(tabla)
+        print(filtros)
+        query = f'SELECT * FROM {tabla}'
+
+        if filtros:
+            preg_query = ' AND '.join(f'{f[0]} {f[1]} %s' for f in filtros)
+            query += f' WHERE {preg_query}'
+            valores_query = tuple(f[2] for f in filtros)
+            print(tabla)
+            print(query)
+            print(valores_query)
+
+            cursor.execute(query, valores_query)
+
+        else:
+            
+            cursor.execute(query)
+        regs = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        print('registros')
+        print(regs)
+        print('registros')
+
+        return regs
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+
 def get_allDB(table:str):
 
     cursor = None
@@ -123,7 +170,6 @@ def get_allDB(table:str):
         filas = cursor.fetchall()
         cursor.close()
         conn.close()
-        print(filas)
         return filas
     except MySQLError as e:
         print( str(e))
@@ -134,23 +180,9 @@ def get_allDB(table:str):
         if conn:
             conn.close()
 
-def readTareas(**kwargs):
-    preguntas = []
+def readTareas(filtros):
+    preguntas = [f'{f[0]} {f[1]} %s' for f in filtros]
     joins = []
-    if 'usuario_encargado' in kwargs:
-        preguntas.append(['users.email = %s',kwargs['usuario_encargado']])
-        joins.append('JOIN users ON tareas.usuario_encargado = users.id ')
-    if 'estado' in kwargs:
-        preguntas.append(['estadosTarea.nombre = %s',kwargs['estado']])
-        joins.append('JOIN estadosTarea ON tareas.estado = estadosTarea.id ')
-
-    if 'notEstado' in kwargs:
-        preguntas.append(['estadosTarea.nombre != %s',kwargs['notEstado']])
-        joins.append('JOIN estadosTarea ON tareas.estado = estadosTarea.id ')
-    if 'empresa' in kwargs:
-        preguntas.append(['tareas.empresa_id = %s',kwargs['empresa']])
-    if 'proyectoId' in kwargs:
-        preguntas.append(['tareas.proyectoId = %s',kwargs['proyectoId']])
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -162,12 +194,11 @@ def readTareas(**kwargs):
     print(query)
     if joins:
         query += ' ' + ' '.join(joins)
-    if preguntas:
-        preg_query = ' AND '.join(p[0] for p in preguntas)
+    if filtros:
+        preg_query = ' AND '.join(f'{f[0]} {f[1]} %s' for f in filtros)
         query += f' WHERE {preg_query}'
-        print(query)
-        valores_query = tuple(p[1] for p in preguntas)
-        print(valores_query)
+        valores_query = tuple(f[2] for f in filtros)
+        print()
 
         cursor.execute(query, valores_query)
 
@@ -175,7 +206,6 @@ def readTareas(**kwargs):
         
         cursor.execute(query)
     filas = cursor.fetchall()
-    print(filas)
     cursor.close()
     conn.close()
     return filas
