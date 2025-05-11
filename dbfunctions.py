@@ -3,7 +3,7 @@ from MySQLdb.cursors import DictCursor
 from MySQLdb import MySQLError
 from dbutils.pooled_db import PooledDB  # Librería para manejar un pool de conexiones
 import traceback
-
+import bcrypt
 import os
 from dotenv import load_dotenv
 import json
@@ -181,7 +181,27 @@ def get_allDB(table:str):
             conn.close()
 
 def readTareas(filtros):
-    preguntas = [f'{f[0]} {f[1]} %s' for f in filtros]
+    def montar_filtros(filtros):
+        resp = []
+        for f in filtros:
+            if len(f) == 1:
+                resp.append(f'{f[0][0]} {f[0][1]} %s')
+            else:
+                or_group = ' OR '.join(f'{g[0]} {g[1]} %s' for g in f)
+                resp.append(f'({or_group})')
+        return resp
+    def montar_valores(filtros):
+        resp = []
+        for f in filtros:
+            if len(f) == 1:
+                resp.append(f[0][2])
+            else:
+                resp.extend(g[2] for g in f)
+        print(resp)
+        return resp
+
+            
+    filtros_query = montar_filtros(filtros)
     joins = []
 
     conn = get_connection()
@@ -195,10 +215,11 @@ def readTareas(filtros):
     if joins:
         query += ' ' + ' '.join(joins)
     if filtros:
-        preg_query = ' AND '.join(f'{f[0]} {f[1]} %s' for f in filtros)
+        preg_query = ' AND '.join(f for f in filtros_query)
         query += f' WHERE {preg_query}'
-        valores_query = tuple(f[2] for f in filtros)
-        print()
+        valores_query = tuple(montar_valores(filtros))
+        print(query)
+        print(valores_query)
 
         cursor.execute(query, valores_query)
 

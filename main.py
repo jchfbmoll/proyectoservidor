@@ -128,10 +128,21 @@ def getTareas(request:Request):
     def montar_filtros_init(user: User) -> list:
         print(user)
         filtros = [] 
-        filtros.append(['estado', '!=', 4])
-        filtros.append(['usuario_encargado', '=', user['id']])
-        filtros.append(['empresa_id', '=', user['ultima_empresa_conn']])
+        filtros.append([('estado', '!=', 4)])
+        filtros.append([('empresa_id', '=', user['ultima_empresa_conn'])])
+        filtros.append([('usuario_encargado', '=', user['id']), ('created_by', '=', user['id'])])
         return filtros
+    
+    def montar_filtros_proyecto(proyectoID: int, user: User) -> list|bool:
+        #comprobamos que la empresa actual y la del proyecto son la misma
+        proyecto = get_reg('proyectos', proyectoID)
+        if proyecto['empresaid'] != user['ultima_empresa_conn']:
+            return False
+        filtros = [] 
+        filtros.append([('proyectoId', '=', proyectoID)])
+        filtros.append([('empresa_id', '=', user['ultima_empresa_conn'])])
+        return filtros
+        
     try:
         refresh_token = request.cookies.get('refresh_token')
         refresh_token = get_token(refresh_token)
@@ -139,13 +150,16 @@ def getTareas(request:Request):
         user = get_reg('users', user_id)
 
         params = dict(request.query_params)
-        print('Los params son')
-        print(params)
-    
+
         if 'init' in params and params['init']:
             filtros = montar_filtros_init(user)
-        elif 'proyectos' in params and params['proyectos']:
-            pass
+        elif 'proyectoId' in params and params['proyectoId']:
+            filtros = montar_filtros_proyecto(params['proyectoId'], user)
+            print('filtros')
+            print(filtros)
+            if not filtros:
+                return JSONResponse(content={'error': f'Hubo un error recuperando las tareas del proyecto actual:  {type(e).__name__} - {e}'}, status_code=500)
+
         taskList = readTareas(filtros)
         tasks = []
         for task in taskList:
@@ -155,7 +169,7 @@ def getTareas(request:Request):
             estado = task['estado']
             tasks.append([id_reg, titulo, estado])
         return JSONResponse(content={"tareas": tasks}, status_code=200)
-    except:
+    except Exception as e:
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error recuperando las tareas:  {type(e).__name__} - {e}'}, status_code=500)
