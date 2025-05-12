@@ -281,17 +281,64 @@ async def adminFuncs(request:Request):
 
 @app.post('/create')
 async def crearTypes(request: Request):
+    def enviarmail(data, mail):
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        print('enviano mail')
+
+        # Datos del remitente
+        
+        correo_emisor = 'jcomasherrero@cifpfbmoll.eu'
+        app_password = 'vnqw ycaw ilqz qcyq'
+        url = 'http://ec2-13-36-210-54.eu-west-3.compute.amazonaws.com:443/'
+        
+
+        # Datos del destinatario
+        correo_receptor = mail
+        asunto = "Bienvenido a CapyGestory"
+        mensaje = f'''
+            Buenas {data['nombre']},
+            Bievenido a CapyGestory.
+            Recuerda que tu nombre de tu usuario es {mail} y tu contraseña es {data['password']}
+            Puedes visitarnos desde {url}
+            '''
+            
+          
+
+        # Crear el mensaje
+        msg = MIMEMultipart()
+        msg['From'] = correo_emisor
+        msg['To'] = correo_receptor
+        msg['Subject'] = asunto
+        msg.attach(MIMEText(mensaje, 'plain'))
+
+        # Enviar correo
+        try:
+            servidor = smtplib.SMTP('smtp.gmail.com', 587)
+            servidor.starttls()
+            servidor.login(correo_emisor, app_password)
+            servidor.send_message(msg)
+            servidor.quit()
+            print("Correo enviado con éxito.")
+        except Exception as e:
+            print(f"Error al enviar el correo: {e}")
+
+        
+
+
     try:
         data = await request.json()
         tabla = data['type']
-        user_id = crearReg(tabla, data) 
-
+        reg_id = crearReg(tabla, data) 
+        print(data)
         if data['type'] == 'users':
             ulid = crearReg('users_login',data)
             reg_user(ulid, data['password'])
-            crearReg('usuarios_empresas', {'user_id': user_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
-
-        return JSONResponse(content={"id":user_id, 'mensaje': f'Registro {user_id} de {tabla} creado correctamente'}, status_code=200)
+            crearReg('usuarios_empresas', {'user_id': reg_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
+            enviarmail(data, data['email'])
+        return JSONResponse(content={"id":reg_id, 'mensaje': f'Registro {reg_id} de {tabla} creado correctamente'}, status_code=200)
     except Exception as e:
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
