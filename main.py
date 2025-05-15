@@ -54,7 +54,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 key="access_token",
                 value=access_token,
                 httponly=True,     # evita acceso desde JS
-                secure=False,      # solo HTTPS (ajústalo a True en producción)
+                secure=True,      # solo HTTPS (ajústalo a True en producción)
                 samesite="None",   # previene CSRF
                 path="/",
                 max_age=60 * 30    # Duración del access_token
@@ -64,7 +64,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Unauthorized"},
-                headers={"Access-Control-Allow-Origin": origins,
+                headers={"Access-Control-Allow-Origin": 'https://localhost',
                     'Access-Control-Allow-Credentials': 'true',
                     'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
                     'Access-Control-Allow-Headers':"*"             
@@ -111,7 +111,7 @@ def check_auth(request: Request):
         response.set_cookie(key="access_token",
             value=access_token,
             httponly=True,     # evita acceso desde JS
-            secure=False,       # solo HTTPS
+            secure=True,       # solo HTTPS
             samesite="None", # previene CSRF
             path="/",
             max_age=60 * 30
@@ -122,7 +122,7 @@ def check_auth(request: Request):
     raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Tokens invalidos",
-                headers={"Access-Control-Allow-Origin": origins,
+                headers={"Access-Control-Allow-Origin": 'https://localhost',
                     'Access-Control-Allow-Credentials': 'true',
                     'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
                     'Access-Control-Allow-Headers':"*"             
@@ -423,7 +423,7 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
         access_token = create_access_token(user.id)
         refresh_token = create_refresh_token(user.id)
         response = JSONResponse(status_code = 200,
-            headers={"Access-Control-Allow-Origin": 'http://localhost',
+            headers={"Access-Control-Allow-Origin": 'https://localhost',
                 'Access-Control-Allow-Credentials': 'true',
                 'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
                 'Access-Control-Allow-Headers':"*"             
@@ -435,7 +435,7 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
         response.set_cookie(key="access_token",
             value=access_token,
             httponly=True,     # evita acceso desde JS
-            secure=False,       # solo HTTPS
+            secure=True,       # solo HTTPS
             samesite="None", # previene CSRF
             path="/",
             max_age=60 * 30
@@ -443,7 +443,7 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
         response.set_cookie(key="refresh_token",
             value=refresh_token,
             httponly=True,     # evita acceso desde JS
-            secure=False,       # solo HTTPS
+            secure=True,       # solo HTTPS
             samesite="None", # previene CSRF
             path="/",
             max_age=60 * 60 * 24 * 180
@@ -453,7 +453,7 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
     raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
-                headers={"Access-Control-Allow-Origin": 'http://localhost',
+                headers={"Access-Control-Allow-Origin": 'https://localhost',
                     'Access-Control-Allow-Credentials': 'true',
                     'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
                     'Access-Control-Allow-Headers':"*"             
@@ -473,7 +473,7 @@ def logout(request: Request):
     response.set_cookie(key="access_token",
             value=access_token,
             httponly=True,     # evita acceso desde JS
-            secure=False,       # solo HTTPS
+            secure=True,       # solo HTTPS
             samesite="None", # previene CSRF
             path="/",
             expires=datetime.now(timezone.utc) - timedelta(days=1)
@@ -481,7 +481,7 @@ def logout(request: Request):
     response.set_cookie(key="refresh_token",
             value=refresh_token,
             httponly=True,     # evita acceso desde JS
-            secure=False,       # solo HTTPS
+            secure=True,       # solo HTTPS
             samesite="None", # previene CSRF
             path="/",
             expires=datetime.now(timezone.utc) - timedelta(days=1)
