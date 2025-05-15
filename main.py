@@ -497,3 +497,33 @@ def me(request: Request):
     user = get_reg('users', user_id)
     return JSONResponse(content={'user': user}, status_code=200)
 
+@app.get('/filtros')
+def filtros(request: Request):
+    try:
+        refresh_token = request.cookies.get('refresh_token')
+        refresh_token = get_token(refresh_token)
+        user_id = refresh_token['sub']
+        user = get_reg('users', user_id)
+
+        params = dict(request.query_params)
+        if 'filtroId' in params:
+            if params['filtroId'] == 1:
+                campo = 'usuario_encargado'
+            elif params['filtroId'] == 2:
+                campo = 'estado'
+        filtros = []
+        filtros.append([(campo, 'is', None)])
+        filtros.append([('empresa_id', '=', user['ultima_empresa_conn'])])
+        taskList = readTareas(filtros)
+        tasks = []
+        for task in taskList:
+            print (f'prueba de {task}')
+            id_reg = task['id']
+            titulo = task['titulo']
+            estado = task['estado']
+            tasks.append([id_reg, titulo, estado])
+        return JSONResponse(content={"tareas": tasks}, status_code=200)
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error recuperando las tareas:  {type(e).__name__} - {e}'}, status_code=500)

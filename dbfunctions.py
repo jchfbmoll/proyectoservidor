@@ -185,7 +185,10 @@ def readTareas(filtros):
         resp = []
         for f in filtros:
             if len(f) == 1:
-                resp.append(f'{f[0][0]} {f[0][1]} %s')
+                if f[0][2]:
+                    resp.append(f'{f[0][0]} {f[0][1]} %s')
+                else:
+                    resp.append(f'{f[0][0]} {f[0][1]} Null')
             else:
                 or_group = ' OR '.join(f'{g[0]} {g[1]} %s' for g in f)
                 resp.append(f'({or_group})')
@@ -194,7 +197,8 @@ def readTareas(filtros):
         resp = []
         for f in filtros:
             if len(f) == 1:
-                resp.append(f[0][2])
+                if f[0][2]:
+                    resp.append(f[0][2])
             else:
                 resp.extend(g[2] for g in f)
         print(resp)
@@ -227,6 +231,7 @@ def readTareas(filtros):
         
         cursor.execute(query)
     filas = cursor.fetchall()
+    
     cursor.close()
     conn.close()
     return filas
