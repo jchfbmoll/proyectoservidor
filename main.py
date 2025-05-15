@@ -17,21 +17,21 @@ from typing import Annotated,Optional
 import token
 
 from validation import authenticate_user, create_access_token, create_refresh_token, validate_tokens, get_token
-origins = [
-   
-    "http://localhost",      # si accedes en local por puerto 80
-    "https://localhost",   # Para permitir cualquier origen (NO recomendado para producción)
+origins = list(set([
+    "http://localhost",
+    "https://localhost",
     "http://localhost:80",
-    "https://localhost:443",  # si tienes un frontend corriendo ahí
+    "https://localhost:443",
     "http://127.0.0.1",
     "http://127.0.0.1:80",
     "https://127.0.0.1",
     "https://127.0.0.1:443",
-]
+]))
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method == "OPTIONS":
             # No aplicar autenticación a las pre-flight
+            
             return await call_next(request)
         public_paths = {"/", "/login", '/logout', '/check-auth'}
         if request.url.path in public_paths:
@@ -64,7 +64,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Unauthorized"},
-                headers={"Access-Control-Allow-Origin": 'http://localhost',
+                headers={"Access-Control-Allow-Origin": origins,
                     'Access-Control-Allow-Credentials': 'true',
                     'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
                     'Access-Control-Allow-Headers':"*"             
@@ -105,7 +105,8 @@ def check_auth(request: Request):
         print(refresh_token)
         access_token = create_access_token(refresh_token['sub'])
         response = JSONResponse(status_code = 200,
-            content= {}
+            content= {},
+            
         )            
         response.set_cookie(key="access_token",
             value=access_token,
@@ -115,12 +116,17 @@ def check_auth(request: Request):
             path="/",
             max_age=60 * 30
         )
-
+        print(response)
         return response
 
     raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Tokens invalidos",
+                headers={"Access-Control-Allow-Origin": origins,
+                    'Access-Control-Allow-Credentials': 'true',
+                    'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
+                    'Access-Control-Allow-Headers':"*"             
+                }
             )
 
 @app.get('/tareas')
@@ -417,7 +423,13 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
         access_token = create_access_token(user.id)
         refresh_token = create_refresh_token(user.id)
         response = JSONResponse(status_code = 200,
-            content= {}
+            headers={"Access-Control-Allow-Origin": 'http://localhost',
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
+                'Access-Control-Allow-Headers':"*"             
+            },
+            content= {},
+            
         )
                 
         response.set_cookie(key="access_token",
@@ -441,6 +453,11 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
     raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
+                headers={"Access-Control-Allow-Origin": 'http://localhost',
+                    'Access-Control-Allow-Credentials': 'true',
+                    'Access-Control-Allow-Methods':"*",  # Permite cualquier tipo de método HTTP (GET, POST, etc.)
+                    'Access-Control-Allow-Headers':"*"             
+                }
                
             )
 
