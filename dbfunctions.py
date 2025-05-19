@@ -123,21 +123,40 @@ def get_reg(tabla: str, id: int):
     return reg
 
 def get_regsDB(tabla: str, filtros: list) -> any:
+    def montar_valores(filtros):
+        resp = []
+        for f in filtros:
+            if len(f) == 1:
+                if f[0][2]:
+                    resp.append(f[0][2])
+            else:
+                resp.extend(g[2] for g in f)
+        print(resp)
+        return resp
     try:
         conn = get_connection()
         cursor = conn.cursor()
         columns = []
         placeholders = []
         values = []
-        print(tabla)
-        print(filtros)
-        query = f'SELECT * FROM {tabla}'
 
+        query = f'SELECT * FROM {tabla}'
         if filtros:
-            preg_query = ' AND '.join(f'{f[0]} {f[1]} %s' for f in filtros)
+            print(filtros)
+            preg_query = []
+            for f in filtros:
+                if len(f) == 1:
+                    print(f)
+                    if f[0][2]:
+                        preg_query.append(f'{f[0][0]} {f[0][1]} %s')
+                    else:
+                        preg_query.append(f'{f[0][0]} {f[0][1]} Null')
+                else:
+                    or_group = ' OR '.join(f'{g[0]} {g[1]} %s' for g in f)
+                    preg_query.append(f'({or_group})')
+            preg_query = ' AND '.join(preg_query)
             query += f' WHERE {preg_query}'
-            valores_query = tuple(f[2] for f in filtros)
-            print(tabla)
+            valores_query = tuple(montar_valores(filtros))
             print(query)
             print(valores_query)
 
@@ -151,7 +170,7 @@ def get_regsDB(tabla: str, filtros: list) -> any:
         conn.close()
         print('registros')
         print(regs)
-        print('registros')
+
 
         return regs
     except Exception as e:
@@ -255,18 +274,20 @@ def updateReg(tabla:str, id_reg:int, campo:str, value: any):
             db.close()
         return {'error': e}
 
+def is_dev(user_id:int, tabla = 'usuarios_empresas', empresa_id = 1):
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = f'SELECT * FROM {tabla} where user_id = %s and empresa_id = %s and rol_id in (%s, %s)'
+    cursor.execute(query, (user_id, 1, 1, 2,))
+    res = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    if res:
+        return True
+    return False
+
 def check_empresas(user_id:int):
-    def is_dev(user_id:int, tabla = 'usuarios_empresas', empresa_id = 1):
-        conn = get_connection()
-        cursor = conn.cursor()
-        query = f'SELECT * FROM {tabla} where user_id = %s and empresa_id = %s and rol_id in (%s, %s)'
-        cursor.execute(query, (user_id, empresa_id, 1, 2,))
-        res = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        if res:
-            return True
-        return False
+
 
     conn = get_connection()
     cursor = conn.cursor()

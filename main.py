@@ -8,7 +8,7 @@ from datetime import datetime,timedelta,timezone
 
 import traceback
 from fastapi import Request
-from dbfunctions import delete_allDB,getProyectosDB,reg_user,get_allDB,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB,get_regsDB
+from dbfunctions import delete_allDB,getProyectosDB,reg_user,get_allDB,crearReg,readTareas,get_reg,updateReg,check_empresas,get_userid,deleteRegDB,get_regsDB,is_dev
 import os
 import json
 
@@ -249,28 +249,6 @@ async def getUsuario(request:Request):
         reg = get_reg('users', params['user_id'])
         return {'nombre': reg['nombre'], 'apellidos':reg['apellidos'], 'email': reg['email'] }
 
-@app.get('/usuarios_encargados')
-async def get_usuarios_encargados(request:Request):
-    try:
-        refresh_token = request.cookies.get('refresh_token')
-        refresh_token = get_token(refresh_token)
-        user_id = refresh_token['sub']
-        user = get_reg('users', user_id)
-        filtros = []
-        filtros.append(['empresa_id', '=', user['ultima_empresa_conn']])
-        filtros.append(['rol_id', '!=', 4])
-        usr_enc = get_regsDB('usuarios_empresas', filtros)
-
-        user_enc_list = [get_reg('users', usr_enc_reg['user_id']) for usr_enc_reg in usr_enc]
-        print(user_enc_list)
-        return JSONResponse(content={"usuarios_encargados": user_enc_list}, status_code=200)
-
-
-    except Exception as e:
-        traceback.print_exc()
-        print(f'Error  {type(e).__name__} - {e}')
-        return JSONResponse(content={'error': f'Hubo un error al obtener los usuarios encargados:  {type(e).__name__} - {e}'}, status_code=500)
-
 
 @app.post('/admin')
 async def adminFuncs(request:Request):
@@ -336,14 +314,14 @@ async def crearTypes(request: Request):
 
     try:
         data = await request.json()
-        tabla = data['type']
+        tabla = data['tabla']
         reg_id = crearReg(tabla, data) 
         print(data)
-        if data['type'] == 'users':
+        if data['tabla'] == 'users':
             ulid = crearReg('users_login',data)
             reg_user(ulid, data['password'])
             crearReg('usuarios_empresas', {'user_id': reg_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
-            enviarmail(data, data['email'])
+            #enviarmail(data, data['email'])
         return JSONResponse(content={"id":reg_id, 'mensaje': f'Registro {reg_id} de {tabla} creado correctamente'}, status_code=200)
     except Exception as e:
         traceback.print_exc()
@@ -354,25 +332,26 @@ async def crearTypes(request: Request):
 async def deleteReg(request: Request):
     try:
         data = await request.json()
-        tabla = data['type']
-        print (data)
-        if data['type'] == 'users':
-            deleteRegDB('users_login', data['campo'], data[data['campo']])  
-            deleteRegDB('usuarios_empresas', 'user_id',  data[data['campo']])
+        tabla = data['tabla']
+        campo = data['campo']
+        valor = data['valor']
 
-        if data['type'] == 'empresa':
-            deleteRegDB('usuarios_empresas', 'empresa_id',  data[data['campo']])
-            deleteRegDB('proyectos', 'empresaid',  data[data['campo']])
-            deleteRegDB('tareas', 'empresaid',  data[data['campo']])
+        if data['tabla'] == 'users':
+            deleteRegDB('users_login', data['campo'],  data['valor'])  
+            deleteRegDB('usuarios_empresas', 'user_id',  data['valor'])
 
+        elif data['tabla'] == 'empresa':
+            deleteRegDB('usuarios_empresas', 'empresa_id', data['valor'])
+            deleteRegDB('proyectos', 'empresaid',  data['valor'])
+            deleteRegDB('tareas', 'empresaid',  data['valor'])
 
-        deleteRegDB(tabla, data['campo'], data[data['campo']]) 
+        deleteRegDB(tabla, campo, valor) 
 
-        return JSONResponse(content={'mensaje': f'Registro {data[data['campo']]} de {tabla} eliminado correctamente'}, status_code=200)
+        return JSONResponse(content={'content': f'Registro {valor} de {tabla} eliminado correctamente'}, status_code=200)
     except Exception as e:
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
-        return JSONResponse(content={'error': f'Hubo un error creando el registro:  {type(e).__name__} - {e}'}, status_code=500)
+        return JSONResponse(content={'error': f'Hubo un error eliminando el registro:  {type(e).__name__} - {e}'}, status_code=500)
 
 @app.post('/update')
 async def actualiza(request: Request):
@@ -495,6 +474,18 @@ def me(request: Request):
     refresh_token = get_token(refresh_token)
     user_id = refresh_token['sub']
     user = get_reg('users', user_id)
+    if is_dev(user_id):
+        user['rol'] = 1
+    else:
+        filtros = []
+        filtros.append([('user_id', '=', user_id)])
+        filtros.append([('empresa_id', '=', user['ultima_empresa_conn'])])
+        rol = get_regsDB('usuarios_empresas', filtros)
+        print(rol)
+        if len(rol)>0:
+            user['rol'] = rol[0]['rol_id']
+        else:
+            user['rol'] = 0
     return JSONResponse(content={'user': user}, status_code=200)
 
 @app.get('/filtros')
@@ -510,7 +501,7 @@ def filtros(request: Request):
             if params['filtroId'] == 1:
                 campo = 'usuario_encargado'
             elif params['filtroId'] == 2:
-                campo = 'estado'
+                campo = 'proyectoId'
         filtros = []
         filtros.append([(campo, 'is', None)])
         filtros.append([('empresa_id', '=', user['ultima_empresa_conn'])])
@@ -527,3 +518,78 @@ def filtros(request: Request):
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error recuperando las tareas:  {type(e).__name__} - {e}'}, status_code=500)
+
+
+@app.get('/filtrarTareas')
+def filtrarTareas(request: Request):
+     try:
+        refresh_token = request.cookies.get('refresh_token')
+        refresh_token = get_token(refresh_token)
+        user_id = refresh_token['sub']
+        user = get_reg('users', user_id)
+
+        params = dict(request.query_params)
+        if 'filtros' in params:
+            taskList = get_regsDB('tareas', params['filtros'])
+            tasks = []
+            for task in taskList:
+                print (f'prueba de {task}')
+                id_reg = task['id']
+                titulo = task['titulo']
+                estado = task['estado']
+                proyecto = task['proyectoId']
+                tipo = task['tipo_id']
+                usuario_encargado = task['usuario_encargado']
+                created_by = task['created_by']
+                
+                tasks.append([id_reg, titulo, estado,tipo,proyecto, usuario_encargado,created_by])
+
+            return JSONResponse(content={"tareas": tasks}, status_code=200)
+
+     except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error filtrando las tareas:  {type(e).__name__} - {e}'}, status_code=500)   
+
+@app.get('/getregistros')
+def getregistros(request: Request):
+    def custom_serializer(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Type {type(obj)} not serializable")
+    try:
+        params = dict(request.query_params)
+        if 'filtros' and 'tabla' in params:
+            registros = get_regsDB(params['tabla'], json.loads(request.query_params.get("filtros")))
+            print(registros)
+            for r in registros:
+                for k, v in r.items():
+                    if isinstance(v, datetime):
+                        r[k] = v.isoformat()
+            return JSONResponse(content={"registros": registros}, status_code=200)
+        
+        return JSONResponse(content={'error': f'Hubo un error generando la petición de registros:  {type(e).__name__} - {e}'}, status_code=500)   
+
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error recuperando los registros:  {type(e).__name__} - {e}'}, status_code=500)   
+
+
+@app.get('/getreg')
+def getreg(request:Request):
+    try:
+        params = dict(request.query_params)
+        if 'id' and 'tabla' in params:
+            registro = get_reg(params['tabla'], params['id'])
+            return JSONResponse(content={"registro": registro}, status_code=200)
+        
+        return JSONResponse(content={'error': f'Hubo un error generando la petición del registro:  {type(e).__name__} - {e}'}, status_code=500)   
+
+    except Exception as e:
+        traceback.print_exc()
+        print(f'Error  {type(e).__name__} - {e}')
+        return JSONResponse(content={'error': f'Hubo un error recuperando el registro:  {type(e).__name__} - {e}'}, status_code=500)   
+
+        
+
