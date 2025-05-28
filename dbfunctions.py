@@ -260,18 +260,19 @@ def updateReg(tabla:str, id_reg:int, campo:str, value: any):
         conn = get_connection()
         cursor = conn.cursor()
         query = f'UPDATE {tabla} SET {campo} = %s WHERE id = %s'
-
+        print(query)
+        print(value, id_reg)
         cursor.execute(query, (value,id_reg,))
         conn.commit()
         cursor.close()
         conn.close()
         return {'notError':True}
     except MySQLError as e:
-        db.rollback()
+        conn.rollback()
         if cursor:
             cursor.close()
-        if db:
-            db.close()
+        if conn:
+            conn.close()
         return {'error': e}
 
 def is_dev(user_id:int, tabla = 'usuarios_empresas', empresa_id = 1):
