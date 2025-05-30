@@ -33,7 +33,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # No aplicar autenticación a las pre-flight
             
             return await call_next(request)
-        public_paths = {"/", "/login", '/logout', '/check-auth'}
+        public_paths = {"/", "/login", '/logout', '/create', '/check-auth'}
         if request.url.path in public_paths:
             return await call_next(request)
         print(request.cookies)
