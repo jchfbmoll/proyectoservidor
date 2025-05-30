@@ -1,7 +1,7 @@
 import MySQLdb
 from MySQLdb.cursors import DictCursor
 from MySQLdb import MySQLError
-from dbutils.pooled_db import PooledDB  # Librería para manejar un pool de conexiones
+from dbutils.pooled_db import PooledDB  
 import traceback
 import bcrypt
 import os
@@ -11,7 +11,7 @@ import json
 
 load_dotenv()
 
-# Ahora puedes acceder a las variables
+# Variables de conexión que están en el dotenv
 DBHOST = os.getenv('DBHOST')
 DBUSER = os.getenv('DBUSER')
 DBPASS = os.getenv('DBPASS')
@@ -32,6 +32,9 @@ pool = PooledDB(
 def get_connection():
     return pool.connection()
 
+
+
+#Función de login qurecupera el apss del user
 def get_user_login(email: str):
     conn = get_connection()
     cursor = conn.cursor()
@@ -45,7 +48,7 @@ def get_user_login(email: str):
     cursor.close()
     conn.close()
     return user
-
+##Función para autentiar el usario
 def authenticate_user(email, password) -> any:
     conn = get_connection()
     cursor = conn.cursor()
@@ -64,7 +67,7 @@ def authenticate_user(email, password) -> any:
     return False
     # Cerrar la conexión
     
-
+##Función para registrar un usuario
 def reg_user(user_id, password):
     # Generar un hash seguro
     salt = bcrypt.gensalt()
@@ -81,7 +84,7 @@ def reg_user(user_id, password):
     conn.close()
 
 
-
+#función para crear registro, comprueba que la estructura del registro sea correcta y si lo es lo introduce.
 def crearReg(tabla, data):
     try:
         conn = get_connection()
@@ -113,7 +116,8 @@ def crearReg(tabla, data):
     except Exception as e:
         print(e) 
         return -1
-        
+
+#función para recuperar un registro de una tabla 
 def get_reg(tabla: str, id: int):
     conn = get_connection()
     cursor = conn.cursor()
@@ -122,6 +126,8 @@ def get_reg(tabla: str, id: int):
     reg = cursor.fetchone()
     return reg
 
+
+#función para recuperar varios registros de una tabla, permite hacer ANDs y ORs mediante una lista de listas de tuplas/arrays en JS.
 def get_regsDB(tabla: str, filtros: list) -> any:
     def montar_valores(filtros):
         resp = []
@@ -177,6 +183,7 @@ def get_regsDB(tabla: str, filtros: list) -> any:
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
 
+# Función para recuperar todos los registros de una tabla
 def get_allDB(table:str):
 
     cursor = None
@@ -199,6 +206,7 @@ def get_allDB(table:str):
         if conn:
             conn.close()
 
+#Función especifica para leer tareas, util al principio, desfasada al final.
 def readTareas(filtros):
     def montar_filtros(filtros):
         resp = []
@@ -254,7 +262,7 @@ def readTareas(filtros):
     cursor.close()
     conn.close()
     return filas
-
+#Función apra actualizar un registro
 def updateReg(tabla:str, id_reg:int, campo:str, value: any):
     try:
         conn = get_connection()
@@ -274,7 +282,7 @@ def updateReg(tabla:str, id_reg:int, campo:str, value: any):
         if conn:
             conn.close()
         return {'error': e}
-
+#Función para comprobar si un usuario es desarrollador, solo sirve si es desarrollador en la empresa con id = 1, si lo es en otra no sirve de nada.
 def is_dev(user_id:int, tabla = 'usuarios_empresas', empresa_id = 1):
     conn = get_connection()
     cursor = conn.cursor()
@@ -287,6 +295,8 @@ def is_dev(user_id:int, tabla = 'usuarios_empresas', empresa_id = 1):
         return True
     return False
 
+
+#Función para recuperar las empresas para el desplegable de empresas.
 def check_empresas(user_id:int):
 
 
@@ -306,6 +316,8 @@ def check_empresas(user_id:int):
     print(res)
     return res
 
+
+#Función para recuperar todos los proyectos de la base de datos, ustil al principio, inutil al final
 def getProyectosDB(empresa:int):
     
 
@@ -321,7 +333,7 @@ def getProyectosDB(empresa:int):
     print(res)
     return res
 
-
+# primera función de comprobación de usuario al loguar, deprecada, comprobaba a partir del mail y no del id. DEPRECADA
 def get_userid(mail):
     conn = get_connection()
     cursor = conn.cursor()
@@ -333,7 +345,7 @@ def get_userid(mail):
     conn.close()
     return res
 
-
+ ## Función para eliminar un registro.
 def deleteRegDB(tabla, campo, value):
     conn = None
     cursor = None
@@ -357,7 +369,7 @@ def deleteRegDB(tabla, campo, value):
             cursor.close()
         if conn:
             conn.close()
-
+##Función para vaciar una tabla y poner el auto_increment a 0
 def delete_allDB(tabla):
     conn = None
     cursor = None

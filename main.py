@@ -17,6 +17,9 @@ from typing import Annotated,Optional
 import token
 
 from validation import authenticate_user, create_access_token, create_refresh_token, validate_tokens, get_token
+
+
+# Origenes desde los que se permite el acceso a la API
 origins = list(set([
     "http://localhost",
     "https://localhost",
@@ -27,6 +30,9 @@ origins = list(set([
     "https://127.0.0.1",
     "https://127.0.0.1:443",
 ]))
+
+
+##Middleware que permite entrar sin autenticacion a ciertos end poinds
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method == "OPTIONS":
@@ -91,6 +97,8 @@ app.add_middleware(AuthMiddleware)
 def read_root():
     return {'message': 'Hola, Mundo!'}
 
+
+## End point que comprueba si el usuairio tiene tokens validos, si no es asi, lo redirige a la pantalla de login, o mejor dicho fuerza la condición en el nmavegador.
 @app.get("/check-auth")
 def check_auth(request: Request):
     access_token, refresh_token = validate_tokens(request)
@@ -128,7 +136,7 @@ def check_auth(request: Request):
                     'Access-Control-Allow-Headers':"*"             
                 }
             )
-
+## end point que comprueba las tareas validas en ese momento de esa empresa
 @app.get('/tareas')
 def getTareas(request:Request):
     def montar_filtros_init(user: User) -> list:
@@ -180,11 +188,13 @@ def getTareas(request:Request):
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error recuperando las tareas:  {type(e).__name__} - {e}'}, status_code=500)
 
-
+## End poind que devuevle toda la información de una tarea con id tarea_id la url seria url/api/tareas/15 donde 15 es tarea_id
 @app.get('/tareas/{tarea_id}')
 def read_tareas(tarea_id: int, otro: str=None):
     tarea = get_reg('tareas', tarea_id)
     return {'tarea': tarea}
+
+## End point que comprueba en que empresas es válido el usuario actual
 
 @app.get('/empresas')
 def getEmpresas(request:Request):
@@ -201,7 +211,7 @@ def getEmpresas(request:Request):
 
     
     
-    
+# End point para los proyectos 
 
 @app.get('/proyectos')
 def getProyectos(request:Request):
@@ -221,7 +231,7 @@ def getProyectos(request:Request):
         return JSONResponse(content={'error': f'Hubo un error recuperando los proyectos:  {type(e).__name__} - {e}'}, status_code=500)
 
     
-    
+## End point para recuperar toda la inforamción de una tabla en concreto
 @app.get('/all')
 async def get_all(request: Request):
     try:
@@ -241,7 +251,7 @@ async def get_all(request: Request):
         return JSONResponse(content={'error': f'Hubo un error actualizando:  {type(e).__name__} - {e}'}, status_code=500)
 
 
-      
+#end point para recuperar la información de un suario
 @app.get('/usuario')
 async def getUsuario(request:Request):
     params = dict(request.query_params)
@@ -249,7 +259,7 @@ async def getUsuario(request:Request):
         reg = get_reg('users', params['user_id'])
         return {'nombre': reg['nombre'], 'apellidos':reg['apellidos'], 'email': reg['email'] }
 
-
+## enmd point para las distintas funciones de settings de desarrollador del sistema
 @app.post('/admin')
 async def adminFuncs(request:Request):
     data = await request.json()
@@ -262,6 +272,8 @@ async def adminFuncs(request:Request):
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error actualizando:  {type(e).__name__} - {e}'}, status_code=500)
+
+## end point para la creación de cosas, en el caso de que sea un usuario, también envía un mail de validación.
 
 @app.post('/create')
 async def crearTypes(request: Request):
@@ -328,6 +340,8 @@ async def crearTypes(request: Request):
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error creando el registro:  {type(e).__name__} - {e}'}, status_code=500)
         
+
+## end poiint para borrar cosas de una tabla en concreto
 @app.post('/delete')
 async def deleteReg(request: Request):
     try:
@@ -352,7 +366,7 @@ async def deleteReg(request: Request):
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error eliminando el registro:  {type(e).__name__} - {e}'}, status_code=500)
-
+## end point para actualizar los valores de una tabla en concreto
 @app.post('/update')
 async def actualiza(request: Request):
     data = await request.json()
@@ -366,6 +380,8 @@ async def actualiza(request: Request):
     if 'error' in res:
         return {'error': f'Hubo un error actualizando el campo {campo} del registro {id} de la tabla {tabla}\nError: {res['error']}'}
 
+
+#end poiint para borrar toda la inforamción de una tabla y resetearla toda
 @app.post('/deleteall')
 async def delete_all(request: Request):
     try:
@@ -386,7 +402,7 @@ async def delete_all(request: Request):
 
 
 
-
+## end point para el login de un usaurio
 @app.post('/login')
 async def login(request: Request, form_data: Optional[UserLogin] = None):
     
@@ -440,7 +456,7 @@ async def login(request: Request, form_data: Optional[UserLogin] = None):
                
             )
 
-
+## end point para finalizar la conexión actual y destruir todaS LAS cookies
 @app.post('/logout')
 def logout(request: Request):
     access_token, refresh_token = validate_tokens(request)
@@ -468,6 +484,8 @@ def logout(request: Request):
 
     return response
     
+
+## end point que devuelve la inforamción util del usuario actual
 @app.get('/me')
 def me(request: Request):
     refresh_token = request.cookies.get('refresh_token')
@@ -487,7 +505,7 @@ def me(request: Request):
         else:
             user['rol'] = 0
     return JSONResponse(content={'user': user}, status_code=200)
-
+## end point para la pantalla de filtros, que permite el filtrado de las distintas tareas.
 @app.get('/filtros')
 def filtros(request: Request):
     try:
@@ -550,7 +568,7 @@ def filtrarTareas(request: Request):
         traceback.print_exc()
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error filtrando las tareas:  {type(e).__name__} - {e}'}, status_code=500)   
-
+## end point para recuperar multiples registros de una tabla en concretos
 @app.get('/getregistros')
 def getregistros(request: Request):
     def custom_serializer(obj):
@@ -575,7 +593,7 @@ def getregistros(request: Request):
         print(f'Error  {type(e).__name__} - {e}')
         return JSONResponse(content={'error': f'Hubo un error recuperando los registros:  {type(e).__name__} - {e}'}, status_code=500)   
 
-
+# end poiunt para recuperar un unico registro de una tabla, nefcesita id y tabla
 @app.get('/getreg')
 def getreg(request:Request):
     try:
