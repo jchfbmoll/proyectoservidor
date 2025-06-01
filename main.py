@@ -288,7 +288,7 @@ async def crearTypes(request: Request):
         
         correo_emisor = 'jcomasherrero@cifpfbmoll.eu'
         app_password = 'vnqw ycaw ilqz qcyq'
-        url = 'https://ec2-13-36-210-54.eu-west-3.compute.amazonaws.com/'
+        url = 'http://ec2-13-36-210-54.eu-west-3.compute.amazonaws.com:443/'
         
 
         # Datos del destinatario
@@ -332,8 +332,7 @@ async def crearTypes(request: Request):
         if data['tabla'] == 'users':
             ulid = crearReg('users_login',data)
             reg_user(ulid, data['password'])
-            if 'empresa' in data:
-                crearReg('usuarios_empresas', {'user_id': reg_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
+            crearReg('usuarios_empresas', {'user_id': reg_id, 'empresa_id': data['empresa'], 'rol_id': data['tipoid']})
             #enviarmail(data, data['email'])
         return JSONResponse(content={"id":reg_id, 'mensaje': f'Registro {reg_id} de {tabla} creado correctamente'}, status_code=200)
     except Exception as e:
